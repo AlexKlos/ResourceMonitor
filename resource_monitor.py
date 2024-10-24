@@ -2,19 +2,20 @@ import sys
 import os
 import psutil
 import GPUtil
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QApplication, QMenu, QAction, QSystemTrayIcon, QStyle, QInputDialog
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QApplication, QMenu, QAction, QSystemTrayIcon, QInputDialog, QGraphicsOpacityEffect
+from PyQt5.QtGui import QIcon, QColor, QPainter
 from PyQt5.QtCore import Qt, QTimer, QSettings, QDir
-from PyQt5.QtGui import QIcon
-
 
 class ResourceMonitor(QWidget):
     """A widget that displays CPU, GPU, and RAM usage with customization options.
     
     This widget is always on top of other windows and can be minimized to the system tray.
-    It allows customization of the window size, transparency, font size, and update intervals.
+    It allows customization of the window size, transparency (background and text separately), font size, and update intervals.
     """
     MIN_WIDTH = 200
     MIN_HEIGHT = 50
+
+    COLOR_MODES = ["System", "Colored"]
 
     def __init__(self):
         super().__init__()
@@ -26,17 +27,15 @@ class ResourceMonitor(QWidget):
 
     def initUI(self):
         """Initializes the user interface of the widget and sets window properties."""
+        # Set the window to always stay on top
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.X11BypassWindowManagerHint)
+
+        # Enable transparency for the background
+        self.setAttribute(Qt.WA_TranslucentBackground)
 
         # Set minimum and fixed window size
         self.setMinimumSize(self.MIN_WIDTH, self.MIN_HEIGHT)
         self.setFixedSize(self.window_width, self.window_height)
-
-        # Set window transparency
-        self.setWindowOpacity(self.window_opacity / 100)
-
-        # Round the corners of the window
-        self.setStyleSheet("border-radius: 15px;")
 
         # Use icon.png as the window and tray icon
         icon_path = os.path.join(QDir.currentPath(), 'icon.png')
@@ -51,6 +50,8 @@ class ResourceMonitor(QWidget):
         self.ram_label = QLabel('RAM: 0%', self)
 
         self.update_font_size()
+        self.update_text_opacity()  # Apply initial text opacity
+        self.update_colors()
 
         self.layout.addWidget(self.cpu_label)
         self.layout.addWidget(self.gpu_label)
@@ -82,10 +83,11 @@ class ResourceMonitor(QWidget):
         self.tray_icon.setContextMenu(tray_menu)
 
     def update_metrics(self):
-        """Fetches and updates the system resource usage metrics (CPU, GPU, and RAM)."""
+        """Fetches and updates the system resource usage metrics (CPU, GPU, and RAM), and brings the widget to the front."""
         if self.show_cpu:
             cpu_usage = psutil.cpu_percent(interval=1)
             self.cpu_label.setText(f'CPU: {cpu_usage}%')
+            self.update_label_color(self.cpu_label, cpu_usage)
         else:
             self.cpu_label.setText("")
 
@@ -93,14 +95,49 @@ class ResourceMonitor(QWidget):
             gpus = GPUtil.getGPUs()
             gpu_usage = gpus[0].load * 100 if gpus else 0
             self.gpu_label.setText(f'GPU: {gpu_usage:.2f}%') if gpus else self.gpu_label.setText("GPU: N/A")
+            self.update_label_color(self.gpu_label, gpu_usage)
         else:
             self.gpu_label.setText("")
 
         if self.show_ram:
             ram_usage = psutil.virtual_memory().percent
             self.ram_label.setText(f'RAM: {ram_usage}%')
+            self.update_label_color(self.ram_label, ram_usage)
         else:
             self.ram_label.setText("")
+
+        # Bring the widget to the front
+        self.raise_()
+        self.activateWindow()
+
+    def update_label_color(self, label, usage):
+        """Updates the color of the label based on the usage percentage with smooth color transition."""
+        if self.color_mode == "Colored":
+            color = self.get_smooth_color_by_usage(usage)
+            label.setStyleSheet(f"color: {color}; font-size: {self.font_size}px;")
+        else:
+            label.setStyleSheet(f"font-size: {self.font_size}px;")  # Use system colors
+
+    def get_smooth_color_by_usage(self, usage):
+        """Returns a smoothly interpolated color (from green to yellow to red) based on the usage percentage."""
+        # Define color ranges for the transitions
+        green = (0, 255, 0)
+        yellow = (255, 255, 0)
+        red = (255, 0, 0)
+
+        if usage < 50:
+            # Interpolate between green and yellow
+            return self.interpolate_color(green, yellow, usage / 50.0)
+        else:
+            # Interpolate between yellow and red
+            return self.interpolate_color(yellow, red, (usage - 50) / 50.0)
+
+    def interpolate_color(self, color1, color2, t):
+        """Linearly interpolates between two colors based on the given factor t (0 <= t <= 1)."""
+        r = int(color1[0] + (color2[0] - color1[0]) * t)
+        g = int(color1[1] + (color2[1] - color1[1]) * t)
+        b = int(color1[2] + (color2[2] - color1[2]) * t)
+        return f"rgb({r}, {g}, {b})"
 
     def mousePressEvent(self, event):
         """Tracks the initial position of the widget to support dragging."""
@@ -153,15 +190,34 @@ class ResourceMonitor(QWidget):
         action_height.triggered.connect(self.change_height)
         size_menu.addAction(action_height)
 
-        # Opacity setting
-        opacity_action = QAction("Change Opacity", self)
-        opacity_action.triggered.connect(self.change_opacity)
-        context_menu.addAction(opacity_action)
+        # Color mode settings
+        color_menu = context_menu.addMenu("Color Mode")
+        for mode in self.COLOR_MODES:
+            action_color_mode = QAction(mode, self)
+            action_color_mode.triggered.connect(lambda checked, m=mode: self.change_color_mode(m))
+            color_menu.addAction(action_color_mode)
+
+        context_menu.addMenu(color_menu)
+
+        # Opacity settings (separate for background and text)
+        opacity_menu = context_menu.addMenu("Transparency Settings")
+        action_background_opacity = QAction("Change Background Opacity", self)
+        action_background_opacity.triggered.connect(self.change_background_opacity)
+        opacity_menu.addAction(action_background_opacity)
+
+        action_text_opacity = QAction("Change Text Opacity", self)
+        action_text_opacity.triggered.connect(self.change_text_opacity)
+        opacity_menu.addAction(action_text_opacity)
 
         # Minimize to tray
         minimize_action = QAction("Minimize to Tray", self)
         minimize_action.triggered.connect(self.minimize_to_tray)
         context_menu.addAction(minimize_action)
+
+        # Quit application
+        quit_action = QAction("Quit", self)
+        quit_action.triggered.connect(QApplication.instance().quit)
+        context_menu.addAction(quit_action)
 
         # Autostart settings
         if self.is_in_startup():
@@ -201,15 +257,38 @@ class ResourceMonitor(QWidget):
     def change_font_size(self, size):
         """Changes the font size of the displayed metrics."""
         self.font_size = size
+        self.save_settings()  # Save the font size
         self.update_font_size()
-        self.save_settings()
 
     def update_font_size(self):
-        """Updates the font size of the displayed metrics."""
-        font_style = f"font-size: {self.font_size}px;"
-        self.cpu_label.setStyleSheet(font_style)
-        self.gpu_label.setStyleSheet(font_style)
-        self.ram_label.setStyleSheet(font_style)
+        """Applies the saved font size without resetting on each update."""
+        style = f"font-size: {self.font_size}px;"
+        self.cpu_label.setStyleSheet(style)
+        self.gpu_label.setStyleSheet(style)
+        self.ram_label.setStyleSheet(style)
+
+    def update_text_opacity(self):
+        """Updates the text opacity using QGraphicsOpacityEffect."""
+        cpu_opacity_effect = QGraphicsOpacityEffect()
+        cpu_opacity_effect.setOpacity(self.text_opacity / 100)
+        self.cpu_label.setGraphicsEffect(cpu_opacity_effect)
+
+        gpu_opacity_effect = QGraphicsOpacityEffect()
+        gpu_opacity_effect.setOpacity(self.text_opacity / 100)
+        self.gpu_label.setGraphicsEffect(gpu_opacity_effect)
+
+        ram_opacity_effect = QGraphicsOpacityEffect()
+        ram_opacity_effect.setOpacity(self.text_opacity / 100)
+        self.ram_label.setGraphicsEffect(ram_opacity_effect)
+
+    def paintEvent(self, event):
+        """Custom paint event to control background color and transparency."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        background_color = QColor(255, 255, 255, int(self.background_opacity * 2.55))  # System background
+        painter.setBrush(background_color)
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(self.rect(), 15, 15)
 
     def change_width(self):
         """Changes the width of the widget."""
@@ -227,13 +306,31 @@ class ResourceMonitor(QWidget):
             self.setFixedSize(self.window_width, self.window_height)
             self.save_settings()
 
-    def change_opacity(self):
-        """Changes the opacity (transparency) of the widget."""
-        opacity, ok = QInputDialog.getInt(self, "Change Opacity", "Enter opacity level (0-100):", self.window_opacity, 0, 100)
+    def change_background_opacity(self):
+        """Changes the opacity (transparency) of the background."""
+        opacity, ok = QInputDialog.getInt(self, "Change Background Opacity", "Enter background opacity (0-100):", self.background_opacity, 0, 100)
         if ok:
-            self.window_opacity = opacity
-            self.setWindowOpacity(self.window_opacity / 100)
+            self.background_opacity = opacity
+            self.update()  # Trigger repaint to apply the new opacity
             self.save_settings()
+
+    def change_text_opacity(self):
+        """Changes the opacity of the text (metrics)."""
+        opacity, ok = QInputDialog.getInt(self, "Change Text Opacity", "Enter text opacity (0-100):", self.text_opacity, 0, 100)
+        if ok:
+            self.text_opacity = opacity
+            self.update_text_opacity()  # Update the text opacity using QGraphicsOpacityEffect
+            self.save_settings()
+
+    def change_color_mode(self, mode):
+        """Changes the color mode (System, Colored)."""
+        self.color_mode = mode
+        self.update_colors()
+        self.save_settings()
+
+    def update_colors(self):
+        """Updates the colors based on the current color mode."""
+        self.update()  # Trigger a repaint
 
     def is_in_startup(self):
         """Checks if the widget is set to run on startup."""
@@ -277,7 +374,9 @@ class ResourceMonitor(QWidget):
         settings.setValue("font_size", self.font_size)
         settings.setValue("window_width", self.window_width)
         settings.setValue("window_height", self.window_height)
-        settings.setValue("window_opacity", self.window_opacity)
+        settings.setValue("background_opacity", self.background_opacity)
+        settings.setValue("text_opacity", self.text_opacity)
+        settings.setValue("color_mode", self.color_mode)
 
     def load_settings(self):
         """Loads saved settings from QSettings."""
@@ -289,7 +388,9 @@ class ResourceMonitor(QWidget):
         self.font_size = settings.value("font_size", 16, type=int)
         self.window_width = settings.value("window_width", self.MIN_WIDTH, type=int)
         self.window_height = settings.value("window_height", self.MIN_HEIGHT, type=int)
-        self.window_opacity = settings.value("window_opacity", 100, type=int)
+        self.background_opacity = settings.value("background_opacity", 100, type=int)
+        self.text_opacity = settings.value("text_opacity", 100, type=int)
+        self.color_mode = settings.value("color_mode", "System")
 
     def check_gpu(self):
         """Checks if a GPU is present on the system. If not, GPU metrics are disabled."""
