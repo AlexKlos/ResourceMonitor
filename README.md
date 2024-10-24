@@ -1,50 +1,57 @@
 
 # Resource Monitor Widget
 
-A lightweight, always-on-top widget for Windows that displays system resource usage such as CPU, GPU, and RAM. It can be customized, minimized to the system tray, and set to autostart with the OS.
+A simple and customizable resource monitor widget for Windows 11 that displays the current usage of CPU, GPU, and RAM. The widget can be resized and moved freely on the screen or fixed in a specific position. It also supports autostart with the OS and allows for various customizations, such as font size, transparency, and color modes.
 
 ## Features
-
-- Displays current CPU, GPU, and RAM usage
-- Customizable update intervals, window size, font size, and transparency
-- Minimize to system tray
-- Autostart with Windows option
-- Always on top of other windows
-- Rounded window corners
+- Monitors CPU, GPU, and RAM usage.
+- Resizable and movable widget.
+- Can autostart with Windows 11.
+- Supports background and text transparency control.
+- Allows customization of font size and update interval.
+- Color mode options: system colors, dynamic color based on usage.
 
 ## Installation
 
-1. Clone the repository and navigate to the project directory:
-
-   ```bash
+1. Clone the repository:
+   ```
    git clone https://github.com/AlexKlos/ResourceMonitor.git
    cd resource-monitor
    ```
 
-2. Install dependencies:
+2. Create and activate a virtual environment:
+   ```
+   python -m venv venv
+   venv\Scripts\activate  (for Windows)
+   ```
 
-   ```bash
+3. Install the required dependencies:
+   ```
    pip install -r requirements.txt
    ```
 
-3. Run the application:
-
-   ```bash
+4. Run the application:
+   ```
    python resource_monitor.py
    ```
 
+## Autostart Setup
+
+The application can be set to run at startup. If enabled through the settings, a `.bat` file is created in the startup folder to ensure the application launches without the console window.
+
 ## Customization Options
 
-- **Window Size**: Adjust width and height from the context menu.
-- **Transparency**: Set the transparency of the window (0-100%).
-- **Font Size**: Customize the font size of the displayed metrics.
-- **Update Interval**: Choose how often the metrics are updated (e.g., every 1 second, 2 seconds, or 5 seconds).
-- **Autostart**: Enable or disable the application to start automatically with Windows.
+- **Font Size**: Changeable from the context menu.
+- **Widget Size**: Both width and height are customizable.
+- **Transparency**: Separate settings for background and text opacity.
+- **Color Mode**: Choose between system colors or dynamic color based on usage.
 
-## System Tray
+## Requirements
 
-The widget can be minimized to the system tray by right-clicking on the widget and selecting "Minimize to Tray." You can restore it by clicking on the tray icon.
+- Python 3.x
+- PyQt5
+- GPUtil
+- psutil
 
 ## License
-
-This project is licensed under the MIT License.
+MIT License
