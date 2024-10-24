@@ -2,8 +2,8 @@ import sys
 import os
 import psutil
 import GPUtil
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QApplication, QMenu, QAction, QSystemTrayIcon, QInputDialog, QGraphicsOpacityEffect
-from PyQt5.QtGui import QIcon, QColor, QPainter
+from PyQt5.QtWidgets import QWidget, QLabel, QApplication, QMenu, QAction, QSystemTrayIcon, QInputDialog, QGraphicsOpacityEffect
+from PyQt5.QtGui import QIcon, QColor, QPainter, QFontMetrics
 from PyQt5.QtCore import Qt, QTimer, QSettings, QDir
 
 class ResourceMonitor(QWidget):
@@ -12,13 +12,11 @@ class ResourceMonitor(QWidget):
     This widget is always on top of other windows and can be minimized to the system tray.
     It allows customization of the window size, transparency (background and text separately), font size, and update intervals.
     """
-    MIN_WIDTH = 200
-    MIN_HEIGHT = 50
-
-    COLOR_MODES = ["System", "Colored"]
-
     def __init__(self):
         super().__init__()
+        # Define color modes for selection in the settings menu
+        self.COLOR_MODES = ["System", "Colored"]
+
         self.load_settings()
         self.tray_icon = None
         self.initUI()
@@ -33,18 +31,14 @@ class ResourceMonitor(QWidget):
         # Enable transparency for the background
         self.setAttribute(Qt.WA_TranslucentBackground)
 
-        # Set minimum and fixed window size
-        self.setMinimumSize(self.MIN_WIDTH, self.MIN_HEIGHT)
-        self.setFixedSize(self.window_width, self.window_height)
+        # Set initial window size and position
+        self.setGeometry(self.window_x, self.window_y, self.window_width, self.window_height)
 
         # Use icon.png as the window and tray icon
         icon_path = os.path.join(QDir.currentPath(), 'icon.png')
         self.setWindowIcon(QIcon(icon_path))
 
-        # Create layout and labels for CPU, GPU, and RAM
-        self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-
+        # Create labels for CPU, GPU, and RAM
         self.cpu_label = QLabel('CPU: 0%', self)
         self.gpu_label = QLabel('GPU: 0%', self)
         self.ram_label = QLabel('RAM: 0%', self)
@@ -52,10 +46,6 @@ class ResourceMonitor(QWidget):
         self.update_font_size()
         self.update_text_opacity()  # Apply initial text opacity
         self.update_colors()
-
-        self.layout.addWidget(self.cpu_label)
-        self.layout.addWidget(self.gpu_label)
-        self.layout.addWidget(self.ram_label)
 
         # Timer to periodically update metrics
         self.timer = QTimer(self)
@@ -151,6 +141,10 @@ class ResourceMonitor(QWidget):
             self.move(self.x() + delta.x(), self.y() + delta.y())
             self.old_pos = event.globalPos()
 
+    def closeEvent(self, event):
+        """Saves the current window position and size before closing."""
+        self.save_settings()
+
     def show_context_menu(self, pos):
         """Displays the context menu for customization options."""
         context_menu = QMenu(self)
@@ -174,12 +168,11 @@ class ResourceMonitor(QWidget):
             action_interval.triggered.connect(lambda checked, i=interval: self.change_update_interval(i))
             interval_menu.addAction(action_interval)
 
-        # Font size options
+        # Font size option (custom input)
         font_menu = context_menu.addMenu("Font Size")
-        for size in [12, 16, 24]:
-            action_font = QAction(f"{size} px", self)
-            action_font.triggered.connect(lambda checked, s=size: self.change_font_size(s))
-            font_menu.addAction(action_font)
+        action_font = QAction("Custom Font Size", self)
+        action_font.triggered.connect(self.change_font_size)
+        font_menu.addAction(action_font)
 
         # Size settings
         size_menu = context_menu.addMenu("Size Settings")
@@ -254,11 +247,13 @@ class ResourceMonitor(QWidget):
         self.timer.start(self.update_interval)
         self.save_settings()
 
-    def change_font_size(self, size):
-        """Changes the font size of the displayed metrics."""
-        self.font_size = size
-        self.save_settings()  # Save the font size
-        self.update_font_size()
+    def change_font_size(self):
+        """Allows the user to input a custom font size."""
+        font_size, ok = QInputDialog.getInt(self, "Change Font Size", "Enter new font size:", self.font_size, 8)
+        if ok:
+            self.font_size = font_size
+            self.save_settings()  # Save the font size
+            self.update_font_size()
 
     def update_font_size(self):
         """Applies the saved font size without resetting on each update."""
@@ -290,19 +285,39 @@ class ResourceMonitor(QWidget):
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(self.rect(), 15, 15)
 
+        # Center the metrics horizontally and vertically
+        self.center_metrics()
+
+    def center_metrics(self):
+        """Centers the CPU, GPU, and RAM metrics horizontally and vertically based on the widget size."""
+        metrics = [self.cpu_label, self.gpu_label, self.ram_label]
+        active_metrics = [label for label in metrics if label.text() != ""]
+
+        num_metrics = len(active_metrics)
+        if num_metrics == 0:
+            return
+
+        width_per_metric = self.width() // num_metrics
+        for i, label in enumerate(active_metrics):
+            font_metrics = QFontMetrics(label.font())
+            label_width = font_metrics.width(label.text())
+            label_x = width_per_metric * i + (width_per_metric - label_width) // 2
+            label_y = (self.height() - label.height()) // 2
+            label.setGeometry(label_x, label_y, label_width, label.height())
+
     def change_width(self):
         """Changes the width of the widget."""
-        width, ok = QInputDialog.getInt(self, "Change Width", "Enter new width:", self.window_width, 200)
+        width, ok = QInputDialog.getInt(self, "Change Width", "Enter new width:", self.window_width, 1)  # No minimum width constraint
         if ok:
-            self.window_width = max(width, self.MIN_WIDTH)
+            self.window_width = width
             self.setFixedSize(self.window_width, self.window_height)
             self.save_settings()
 
     def change_height(self):
         """Changes the height of the widget."""
-        height, ok = QInputDialog.getInt(self, "Change Height", "Enter new height:", self.window_height, 50)
+        height, ok = QInputDialog.getInt(self, "Change Height", "Enter new height:", self.window_height, 1)  # No minimum height constraint
         if ok:
-            self.window_height = max(height, self.MIN_HEIGHT)
+            self.window_height = height
             self.setFixedSize(self.window_width, self.window_height)
             self.save_settings()
 
@@ -377,6 +392,8 @@ class ResourceMonitor(QWidget):
         settings.setValue("background_opacity", self.background_opacity)
         settings.setValue("text_opacity", self.text_opacity)
         settings.setValue("color_mode", self.color_mode)
+        settings.setValue("window_x", self.x())
+        settings.setValue("window_y", self.y())
 
     def load_settings(self):
         """Loads saved settings from QSettings."""
@@ -386,11 +403,13 @@ class ResourceMonitor(QWidget):
         self.show_ram = settings.value("show_ram", True, type=bool)
         self.update_interval = settings.value("update_interval", 2000, type=int)
         self.font_size = settings.value("font_size", 16, type=int)
-        self.window_width = settings.value("window_width", self.MIN_WIDTH, type=int)
-        self.window_height = settings.value("window_height", self.MIN_HEIGHT, type=int)
+        self.window_width = settings.value("window_width", 300, type=int)
+        self.window_height = settings.value("window_height", 50, type=int)
         self.background_opacity = settings.value("background_opacity", 100, type=int)
         self.text_opacity = settings.value("text_opacity", 100, type=int)
         self.color_mode = settings.value("color_mode", "System")
+        self.window_x = settings.value("window_x", 100, type=int)
+        self.window_y = settings.value("window_y", 100, type=int)
 
     def check_gpu(self):
         """Checks if a GPU is present on the system. If not, GPU metrics are disabled."""
@@ -402,20 +421,36 @@ class ResourceMonitor(QWidget):
 
 
 def add_to_startup(file_path=""):
-    """Adds the widget to Windows startup."""
-    bat_path = os.path.join(os.getenv('APPDATA'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
-    with open(os.path.join(bat_path, "ResourceMonitor.bat"), "w+") as bat_file:
-        bat_file.write(f'start "" "{file_path}"')
+    """Adds the widget to Windows startup without console."""
+    if file_path == "":
+        file_path = os.path.realpath(__file__)  # Get the full path of the current script
+
+    python_executable = os.path.join(os.getenv('VIRTUAL_ENV'), 'Scripts', 'pythonw.exe')  # Path to pythonw.exe in venv
+    if not os.path.exists(python_executable):
+        python_executable = 'pythonw'  # Fallback to system pythonw if virtual environment not found
+
+    bat_path = os.path.join(os.getenv('APPDATA'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'ResourceMonitor.bat')
+
+    try:
+        with open(bat_path, "w+") as bat_file:
+            # Write the command to use pythonw.exe and start the script
+            bat_file.write(f'@echo off\nstart "" "{python_executable}" "{file_path}"')
+        print(f"Autostart enabled. BAT file created at {bat_path}")
+    except Exception as e:
+        print(f"Error while enabling autostart: {e}")
 
 
 def remove_from_startup():
     """Removes the widget from Windows startup."""
     bat_path = os.path.join(os.getenv('APPDATA'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'ResourceMonitor.bat')
     if os.path.exists(bat_path):
-        os.remove(bat_path)
-        print("Resource Monitor removed from startup.")
+        try:
+            os.remove(bat_path)
+            print("Autostart disabled.")
+        except Exception as e:
+            print(f"Error while disabling autostart: {e}")
     else:
-        print("Resource Monitor not found in startup.")
+        print("Autostart is not enabled.")
 
 
 if __name__ == '__main__':
