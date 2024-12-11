@@ -3,6 +3,8 @@
 
 A simple and customizable resource monitor widget for Windows 11 that displays the current usage of CPU, GPU, and RAM. The widget can be resized and moved freely on the screen or fixed in a specific position. It also supports autostart with the OS and allows for various customizations, such as font size, transparency, and color modes.
 
+![widget](scr1.png)
+
 ## Features
 - Monitors CPU, GPU, and RAM usage.
 - Resizable and movable widget.
@@ -41,10 +43,18 @@ The application can be set to run at startup. If enabled through the settings, a
 
 ## Customization Options
 
-- **Font Size**: Changeable from the context menu.
-- **Widget Size**: Both width and height are customizable.
-- **Transparency**: Separate settings for background and text opacity.
-- **Color Mode**: Choose between system colors or dynamic color based on usage.
+- **Metrics Selection**: Choose which metrics to display (CPU, GPU, RAM).
+- **Font Size**: Adjustable to any value via the context menu.
+- **Widget Size**: Fully customizable width and height, with no minimum size restrictions.
+- **Transparency**: Control the transparency of the background and text independently.
+- **Color Modes**:
+    - **System Colors**: Matches the system's theme colors.
+    - **Dynamic Colors**: Text color changes dynamically based on the resource usage percentage (e.g., green for low usage, yellow for medium, red for high).
+- **Update Interval**: Change the refresh rate for updating metrics (e.g., every 1 second, 2 seconds, etc.).
+- **Startup Position**: Saves the widget's position on the screen and restores it upon the next launch.
+- **Autostart**: Enable or disable launching the widget at system startup.
+
+![settings](scr2.png)
 
 ## Requirements
 
