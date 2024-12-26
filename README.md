@@ -16,7 +16,7 @@ A simple and customizable resource monitor widget for Windows 11 that displays t
 ## Simple start
 - Just copy the file `resource_monitor.exe` to your PC and then run it.
 - This simple method may not work correctly on Windows versions below 11.
-- If resource_monitor.exe starts with an error, try to install and run it using resource_monitor.py following the instructions below.
+- If `resource_monitor.exe` starts with an error, try to install and run it using `resource_monitor.py` following the instructions below.
 
 ## Installation
 
