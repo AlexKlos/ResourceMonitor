@@ -1,6 +1,8 @@
 import ctypes
 import os
+import shutil
 import sys
+import winreg
 
 import GPUtil
 
@@ -54,62 +56,83 @@ class MEMORYSTATUSEX(ctypes.Structure):
 GetSystemTimes = ctypes.windll.kernel32.GetSystemTimes
 GlobalMemoryStatusEx = ctypes.windll.kernel32.GlobalMemoryStatusEx
 
+REG_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+REG_VALUE_NAME = "ResourceMonitor"
+
 
 def add_to_startup(file_path=""):
-    """Add the widget to Windows startup without console.
+    """Add the application to Windows startup (via registry)."""
+    stable_dir = os.path.join(os.getenv("LOCALAPPDATA"), "ResourceMonitor")
+    stable_exe_path = os.path.join(stable_dir, "ResourceMonitor.exe")
 
-    Args:
-        file_path (str): Path to the current file. Defaults to "".
-    """
-    if file_path == "":
-        file_path = os.path.realpath(__file__)
+    if not os.path.exists(stable_dir):
+        os.makedirs(stable_dir)
 
-    python_executable = os.path.join(
-        os.getenv('VIRTUAL_ENV'),
-        'Scripts',
-        'pythonw.exe'
-    )
-    if not os.path.exists(python_executable):
-        python_executable = 'pythonw'
+    if not file_path:
+        file_path = os.path.realpath(sys.argv[0])
 
-    bat_path = os.path.join(
-        os.getenv('APPDATA'),
-        'Microsoft',
-        'Windows',
-        'Start Menu',
-        'Programs',
-        'Startup',
-        'ResourceMonitor.bat'
-    )
+    if not os.path.exists(stable_exe_path):
+        shutil.copyfile(file_path, stable_exe_path)
+
+    exe_for_reg = f'"{stable_exe_path}"'
     try:
-        with open(bat_path, "w+") as bat_file:
-            bat_file.write(
-                f'@echo off\nstart "" "{python_executable}" "{file_path}"'
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            REG_RUN_KEY,
+            0,
+            winreg.KEY_SET_VALUE
+        ) as key:
+            winreg.SetValueEx(
+                key, 
+                REG_VALUE_NAME, 
+                0, 
+                winreg.REG_SZ, 
+                exe_for_reg
             )
-        print(f"Autostart enabled. BAT file created at {bat_path}")
+        print("Autostart is configured via registry.")
     except Exception as e:
-        print(f"Error while enabling autostart: {e}")
+        print("Error writing to the registry:", e)
 
 
 def remove_from_startup():
-    """Remove the widget from Windows startup."""
-    bat_path = os.path.join(
-        os.getenv('APPDATA'),
-        'Microsoft',
-        'Windows',
-        'Start Menu',
-        'Programs',
-        'Startup',
-        'ResourceMonitor.bat'
-    )
-    if os.path.exists(bat_path):
-        try:
-            os.remove(bat_path)
-            print("Autostart disabled.")
-        except Exception as e:
-            print(f"Error while disabling autostart: {e}")
-    else:
-        print("Autostart is not enabled.")
+    """Remove the application from Windows startup (via registry)."""
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            REG_RUN_KEY,
+            0,
+            winreg.KEY_SET_VALUE
+        ) as key:
+            winreg.DeleteValue(key, REG_VALUE_NAME)
+        print("Autostart disabled (registry entry removed).")
+    except FileNotFoundError:
+        print("Autostart is not enabled (registry value not found).")
+    except Exception as e:
+        print(f"Error while disabling autostart: {e}")
+
+
+def is_autostart_enabled():
+    """Check if the app is set to run on startup (via registry).
+
+    Returns:
+        bool: True if the 'ResourceMonitor' value is found in HKCU\...\Run,
+              otherwise False.
+    """
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            REG_RUN_KEY,
+            0,
+            winreg.KEY_READ
+        ) as key:
+            value, regtype = winreg.QueryValueEx(key, REG_VALUE_NAME)
+            if value:
+                return True
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        print("Error checking registry:", e)
+    return False
 
 
 class ResourceMonitor(QWidget):
@@ -189,7 +212,7 @@ class ResourceMonitor(QWidget):
 
     def get_system_times(self):
         """Return current (idle, kernel, user) times from Windows API.
-
+        
         Returns:
             tuple: A tuple of (idle, kernel, user) 64-bit counters.
         """
@@ -449,21 +472,11 @@ class ResourceMonitor(QWidget):
         context_menu.addAction(quit_action)
 
         if self.is_in_startup():
-            action_toggle_autostart = QAction(
-                "Disable Autostart",
-                self
-            )
-            action_toggle_autostart.triggered.connect(
-                self.disable_autostart
-            )
+            action_toggle_autostart = QAction("Disable Autostart", self)
+            action_toggle_autostart.triggered.connect(self.disable_autostart)
         else:
-            action_toggle_autostart = QAction(
-                "Enable Autostart",
-                self
-            )
-            action_toggle_autostart.triggered.connect(
-                self.enable_autostart
-            )
+            action_toggle_autostart = QAction("Enable Autostart", self)
+            action_toggle_autostart.triggered.connect(self.enable_autostart)
         context_menu.addAction(action_toggle_autostart)
 
         context_menu.exec_(self.mapToGlobal(pos))
@@ -643,29 +656,16 @@ class ResourceMonitor(QWidget):
         self.update()
 
     def is_in_startup(self):
-        """Check if the widget is set to run on startup.
-
-        Returns:
-            bool: True if autostart script exists, False otherwise.
-        """
-        bat_path = os.path.join(
-            os.getenv('APPDATA'),
-            'Microsoft',
-            'Windows',
-            'Start Menu',
-            'Programs',
-            'Startup',
-            'ResourceMonitor.bat'
-        )
-        return os.path.exists(bat_path)
+        """Check if the app is set to run on startup (registry-based)."""
+        return is_autostart_enabled()
 
     def enable_autostart(self):
-        """Enable the widget to run on Windows startup."""
-        add_to_startup(os.path.realpath(__file__))
+        """Enable the widget to run on Windows startup (registry-based)."""
+        add_to_startup()
         print("Autostart enabled.")
 
     def disable_autostart(self):
-        """Disable the widget from running on Windows startup."""
+        """Disable the widget from running on Windows startup (registry-based)."""
         remove_from_startup()
         print("Autostart disabled.")
 

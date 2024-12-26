@@ -13,6 +13,11 @@ A simple and customizable resource monitor widget for Windows 11 that displays t
 - Allows customization of font size and update interval.
 - Color mode options: system colors, dynamic color based on usage.
 
+## Simple start
+- Just copy the file `resource_monitor.exe` to your PC and then run it.
+- This simple method may not work correctly on Windows versions below 11.
+- If resource_monitor.exe starts with an error, try to install and run it using resource_monitor.py following the instructions below.
+
 ## Installation
 
 1. Clone the repository:
@@ -39,7 +44,7 @@ A simple and customizable resource monitor widget for Windows 11 that displays t
 
 ## Autostart Setup
 
-The application can be set to run at startup. If enabled through the settings, a `.bat` file is created in the startup folder to ensure the application launches without the console window.
+The application can be set to run at startup. If enabled through the settings, copies it .exe to the folder `LOCALAPPDATA\Resource Monitor`, writes the key to the registry to ensure the application launches without the console window.
 
 ## Customization Options
 
@@ -50,7 +55,7 @@ The application can be set to run at startup. If enabled through the settings, a
 - **Color Modes**:
     - **System Colors**: Matches the system's theme colors.
     - **Dynamic Colors**: Text color changes dynamically based on the resource usage percentage (e.g., green for low usage, yellow for medium, red for high).
-- **Update Interval**: Change the refresh rate for updating metrics (e.g., every 1 second, 2 seconds, etc.).
+- **Update Interval**: Change the refresh rate for updating metrics (e.g., every 1 second, 2 or 5 seconds).
 - **Startup Position**: Saves the widget's position on the screen and restores it upon the next launch.
 - **Autostart**: Enable or disable launching the widget at system startup.
 
@@ -61,7 +66,6 @@ The application can be set to run at startup. If enabled through the settings, a
 - Python 3.x
 - PyQt5
 - GPUtil
-- psutil
 
 ## License
 MIT License
