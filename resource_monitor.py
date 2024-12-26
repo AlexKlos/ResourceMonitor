@@ -1,8 +1,9 @@
+import ctypes
 import os
 import sys
 
-import psutil
 import GPUtil
+
 from PyQt5.QtCore import (
     QDir,
     QSettings,
@@ -25,6 +26,33 @@ from PyQt5.QtWidgets import (
     QSystemTrayIcon,
     QWidget
 )
+
+
+class FILETIME(ctypes.Structure):
+    """Windows FILETIME structure for GetSystemTimes API."""
+    _fields_ = [
+        ("dwLowDateTime", ctypes.c_uint32),
+        ("dwHighDateTime", ctypes.c_uint32)
+    ]
+
+
+class MEMORYSTATUSEX(ctypes.Structure):
+    """Windows MEMORYSTATUSEX structure for GlobalMemoryStatusEx API."""
+    _fields_ = [
+        ("dwLength", ctypes.c_uint32),
+        ("dwMemoryLoad", ctypes.c_uint32),
+        ("ullTotalPhys", ctypes.c_uint64),
+        ("ullAvailPhys", ctypes.c_uint64),
+        ("ullTotalPageFile", ctypes.c_uint64),
+        ("ullAvailPageFile", ctypes.c_uint64),
+        ("ullTotalVirtual", ctypes.c_uint64),
+        ("ullAvailVirtual", ctypes.c_uint64),
+        ("ullAvailExtendedVirtual", ctypes.c_uint64),
+    ]
+
+
+GetSystemTimes = ctypes.windll.kernel32.GetSystemTimes
+GlobalMemoryStatusEx = ctypes.windll.kernel32.GlobalMemoryStatusEx
 
 
 def add_to_startup(file_path=""):
@@ -98,11 +126,17 @@ class ResourceMonitor(QWidget):
         super().__init__()
         self.COLOR_MODES = ["System", "Colored"]
 
+        self.prev_idle = 0
+        self.prev_kernel = 0
+        self.prev_user = 0
+
         self.load_settings()
         self.tray_icon = None
         self.init_ui()
         self.old_pos = None
         self.check_gpu()
+
+        self.prev_idle, self.prev_kernel, self.prev_user = self.get_system_times()
 
     def init_ui(self):
         """Initialize the user interface of the widget and set window properties."""
@@ -153,14 +187,73 @@ class ResourceMonitor(QWidget):
 
         self.tray_icon.setContextMenu(tray_menu)
 
+    def get_system_times(self):
+        """Return current (idle, kernel, user) times from Windows API.
+
+        Returns:
+            tuple: A tuple of (idle, kernel, user) 64-bit counters.
+        """
+        idle_time = FILETIME()
+        kernel_time = FILETIME()
+        user_time = FILETIME()
+
+        success = GetSystemTimes(
+            ctypes.byref(idle_time),
+            ctypes.byref(kernel_time),
+            ctypes.byref(user_time)
+        )
+
+        if not success:
+            return 0, 0, 0
+
+        idle = (idle_time.dwHighDateTime << 32) | idle_time.dwLowDateTime
+        kernel = (kernel_time.dwHighDateTime << 32) | kernel_time.dwLowDateTime
+        user = (user_time.dwHighDateTime << 32) | user_time.dwLowDateTime
+
+        return idle, kernel, user
+
+    def get_cpu_usage(self):
+        """Calculate CPU usage using the difference of system times.
+
+        Returns:
+            float: CPU usage percentage (0..100).
+        """
+        idle, kernel, user = self.get_system_times()
+
+        idle_diff = idle - self.prev_idle
+        kernel_diff = kernel - self.prev_kernel
+        user_diff = user - self.prev_user
+        total_diff = kernel_diff + user_diff
+
+        self.prev_idle = idle
+        self.prev_kernel = kernel
+        self.prev_user = user
+
+        if total_diff == 0:
+            return 0.0
+
+        usage = 100.0 * (1.0 - (idle_diff / float(total_diff)))
+        return usage
+
+    def get_ram_usage(self):
+        """Get the current RAM usage percentage using GlobalMemoryStatusEx.
+
+        Returns:
+            float: RAM usage percentage (0..100).
+        """
+        mem_status = MEMORYSTATUSEX()
+        mem_status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+        if not GlobalMemoryStatusEx(ctypes.byref(mem_status)):
+            return 0.0
+        return float(mem_status.dwMemoryLoad)
+
     def update_metrics(self):
-        """Fetch and update the system resource usage metrics (CPU, GPU, and RAM).
+        """Fetch and update system resource usage metrics (CPU, GPU, and RAM).
 
         Also bring the widget to the front.
         """
         if self.show_cpu:
-            # Use non-blocking call to avoid freezing
-            cpu_usage = psutil.cpu_percent(interval=None)
+            cpu_usage = self.get_cpu_usage()
             self.cpu_label.setText(f'CPU: {cpu_usage:.0f}%')
             self.update_label_color(self.cpu_label, cpu_usage)
         else:
@@ -178,7 +271,7 @@ class ResourceMonitor(QWidget):
             self.gpu_label.setText("")
 
         if self.show_ram:
-            ram_usage = psutil.virtual_memory().percent
+            ram_usage = self.get_ram_usage()
             self.ram_label.setText(f'RAM: {ram_usage:.0f}%')
             self.update_label_color(self.ram_label, ram_usage)
         else:
@@ -188,10 +281,8 @@ class ResourceMonitor(QWidget):
         self.activateWindow()
 
     def update_label_color(self, label, usage):
-        """Update the color of the label based on the usage percentage.
+        """Update the color of the label based on usage percentage.
 
-        Uses a smooth color transition if 'Colored' mode is enabled.
-        
         Args:
             label (QLabel): The label to update.
             usage (float): Resource usage percentage.
@@ -300,7 +391,7 @@ class ResourceMonitor(QWidget):
         interval_menu = context_menu.addMenu("Update Interval")
         for interval in [1000, 2000, 5000]:
             action_interval = QAction(
-                f"{interval // 1000} sec", 
+                f"{interval // 1000} sec",
                 self
             )
             action_interval.triggered.connect(
@@ -587,7 +678,7 @@ class ResourceMonitor(QWidget):
         """Restore the widget from the system tray.
 
         Args:
-            reason (QSystemTrayIcon.ActivationReason): Reason for tray icon activation.
+            reason (QSystemTrayIcon.ActivationReason): Reason for tray icon.
         """
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self.show_widget()
@@ -627,7 +718,8 @@ class ResourceMonitor(QWidget):
         self.font_size = settings.value("font_size", 16, type=int)
         self.window_width = settings.value("window_width", 300, type=int)
         self.window_height = settings.value("window_height", 50, type=int)
-        self.background_opacity = settings.value("background_opacity", 100, type=int)
+        self.background_opacity = settings.value("background_opacity", 100,
+                                                 type=int)
         self.text_opacity = settings.value("text_opacity", 100, type=int)
         self.color_mode = settings.value("color_mode", "System")
         self.window_x = settings.value("window_x", 100, type=int)
