@@ -151,10 +151,9 @@ def is_autostart_enabled():
 class ResourceMonitor(QWidget):
     """A widget that displays CPU, GPU, and RAM usage with customization.
 
-    This widget is always on top of other windows and can be minimized
-    to the system tray. It allows customization of the window size,
-    transparency (background and text separately), font size, and
-    update intervals.
+    This widget is always on top of other windows. It allows customization 
+    of the window size, transparency (background and text separately), 
+    font size, and update intervals.
     """
 
     def __init__(self):
@@ -476,10 +475,6 @@ class ResourceMonitor(QWidget):
         opacity_menu.addAction(action_text_opacity)
         context_menu.addMenu(opacity_menu)
 
-        minimize_action = QAction("Minimize to Tray", self)
-        minimize_action.triggered.connect(self.minimize_to_tray)
-        context_menu.addAction(minimize_action)
-
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(QApplication.instance().quit)
         context_menu.addAction(quit_action)
@@ -681,11 +676,6 @@ class ResourceMonitor(QWidget):
         """Disable the widget from running on Windows startup (registry-based)."""
         remove_from_startup()
         print("Autostart disabled.")
-
-    def minimize_to_tray(self):
-        """Minimize the widget to the system tray."""
-        self.hide()
-        self.tray_icon.show()
 
     def restore_from_tray(self, reason):
         """Restore the widget from the system tray.
