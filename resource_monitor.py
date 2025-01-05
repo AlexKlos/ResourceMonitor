@@ -2,7 +2,20 @@ import ctypes
 import os
 import shutil
 import sys
+import subprocess
 import winreg
+
+
+if os.name == 'nt':
+    CREATE_NO_WINDOW = 0x08000000
+    _orig_popen = subprocess.Popen
+
+    def _no_console_popen(*args, **kwargs):
+        if "creationflags" not in kwargs:
+            kwargs["creationflags"] = CREATE_NO_WINDOW
+        return _orig_popen(*args, **kwargs)
+
+    subprocess.Popen = _no_console_popen
 
 import GPUtil
 
