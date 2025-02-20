@@ -69,3 +69,6 @@ The application can be set to run at startup. If enabled through the settings, c
 
 ## License
 MIT License
+
+## Author
+Developer: [AlexKlos](https://github.com/AlexKlos)
