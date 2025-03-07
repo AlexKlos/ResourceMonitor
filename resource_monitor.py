@@ -5,6 +5,21 @@ import sys
 import subprocess
 import winreg
 
+try:
+    import distutils.spawn
+except ModuleNotFoundError:
+    import types
+
+    distutils_fake = types.ModuleType('distutils')
+    distutils_fake.spawn = types.ModuleType('spawn')
+
+    def find_executable(exe):
+        return shutil.which(exe)
+
+    distutils_fake.spawn.find_executable = find_executable
+
+    sys.modules['distutils'] = distutils_fake
+    sys.modules['distutils.spawn'] = distutils_fake.spawn
 
 if os.name == 'nt':
     CREATE_NO_WINDOW = 0x08000000
@@ -125,7 +140,7 @@ def remove_from_startup():
 
 
 def is_autostart_enabled():
-    """Check if the app is set to run on startup (via registry).
+    r"""Check if the app is set to run on startup (via registry).
 
     Returns:
         bool: True if the 'ResourceMonitor' value is found in HKCU\...\Run,
@@ -730,11 +745,17 @@ class ResourceMonitor(QWidget):
 
     def check_gpu(self):
         """Check if a GPU is present on the system.
-
-        If not, GPU metrics are disabled.
+    
+        If not, or if nvidia-smi fails, GPU metrics are disabled.
         """
-        gpus = GPUtil.getGPUs()
-        if not gpus:
+        try:
+            gpus = GPUtil.getGPUs()
+            if not gpus:
+                self.show_gpu = False
+                self.gpu_label.setText("GPU: N/A")
+                self.save_settings()
+        except ValueError as e:
+            print("Failed to query GPU info:", e)
             self.show_gpu = False
             self.gpu_label.setText("GPU: N/A")
             self.save_settings()
