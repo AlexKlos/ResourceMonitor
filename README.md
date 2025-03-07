@@ -1,21 +1,20 @@
 
 # Resource Monitor Widget
 
-A simple and customizable resource monitor widget for Windows 11 that displays the current usage of CPU, GPU, and RAM. The widget can be resized and moved freely on the screen or fixed in a specific position. It also supports autostart with the OS and allows for various customizations, such as font size, transparency, and color modes.
+A simple and customizable resource monitor widget for Windows 10/11 that displays the current usage of CPU, GPU, and RAM. The widget can be resized and moved freely on the screen or fixed in a specific position. It also supports autostart with the OS and allows for various customizations, such as font size, transparency, and color modes.
 
 ![widget](scr1.png)
 
 ## Features
 - Monitors CPU, GPU, and RAM usage.
 - Resizable and movable widget.
-- Can autostart with Windows 11.
+- Can autostart with Windows 10/11.
 - Supports background and text transparency control.
 - Allows customization of font size and update interval.
 - Color mode options: system colors, dynamic color based on usage.
 
 ## Simple start
 - Just copy the file `resource_monitor.exe` to your PC and then run it.
-- This simple method may not work correctly on Windows versions below 11.
 - If `resource_monitor.exe` starts with an error, try to install and run it using `resource_monitor.py` following the instructions below.
 
 ## Installation
