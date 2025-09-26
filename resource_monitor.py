@@ -1,3 +1,5 @@
+__version__ = "1.2.0.0"
+
 import ctypes
 import os
 import shutil
