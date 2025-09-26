@@ -88,78 +88,118 @@ REG_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 REG_VALUE_NAME = "ResourceMonitor"
 
 
+def _startup_folder():
+    """Return path to the user's Startup folder (shell:startup).
+
+    Returns:
+        str: Absolute path to the Startup folder.
+    """
+    return os.path.join(
+        os.getenv('APPDATA'),
+        'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'
+    )
+
+
+def _startup_bat_path():
+    """Return full path to the ResourceMonitor startup .bat.
+
+    Returns:
+        str: Absolute path to ResourceMonitor.bat in Startup.
+    """
+    return os.path.join(_startup_folder(), "ResourceMonitor.bat")
+
+
 def add_to_startup(file_path=""):
-    """Add the application to Windows startup (via registry)."""
-    stable_dir = os.path.join(os.getenv("LOCALAPPDATA"), "ResourceMonitor")
-    stable_exe_path = os.path.join(stable_dir, "ResourceMonitor.exe")
+    """Add the application to Windows startup via Startup .bat.
 
-    if not os.path.exists(stable_dir):
-        os.makedirs(stable_dir)
+    This avoids registry-based persistence to reduce AV false positives
+    and issues with onefile extraction paths.
 
+    Args:
+        file_path (str): Optional explicit path to the executable.
+            If empty, uses the current process path.
+    """
     if not file_path:
         file_path = os.path.realpath(sys.argv[0])
 
-    if not os.path.exists(stable_exe_path):
-        shutil.copyfile(file_path, stable_exe_path)
+    startup_dir = _startup_folder()
+    os.makedirs(startup_dir, exist_ok=True)
 
-    exe_for_reg = f'"{stable_exe_path}"'
+    bat_path = _startup_bat_path()
+    bat_contents = f'@echo off\r\nstart "" "{file_path}"\r\n'
+
     try:
-        with winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            REG_RUN_KEY,
-            0,
-            winreg.KEY_SET_VALUE
-        ) as key:
-            winreg.SetValueEx(
-                key, 
-                REG_VALUE_NAME, 
-                0, 
-                winreg.REG_SZ, 
-                exe_for_reg
-            )
-        print("Autostart is configured via registry.")
+        with open(bat_path, "w", encoding="utf-8") as bat:
+            bat.write(bat_contents)
+        print("Autostart configured via Startup .bat")
     except Exception as e:
-        print("Error writing to the registry:", e)
+        print("Failed to write Startup .bat:", e)
 
 
 def remove_from_startup():
-    """Remove the application from Windows startup (via registry)."""
+    """Remove the application from Windows startup.
+
+    Removes Startup .bat and also tries to clean an old registry-based
+    autostart entry for backward compatibility.
+    """
+    bat_path = _startup_bat_path()
+    try:
+        if os.path.exists(bat_path):
+            os.remove(bat_path)
+            print("Autostart .bat removed.")
+        else:
+            print("Autostart .bat not found.")
+    except Exception as e:
+        print("Failed to remove Startup .bat:", e)
+
     try:
         with winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            REG_RUN_KEY,
-            0,
-            winreg.KEY_SET_VALUE
+            winreg.HKEY_CURRENT_USER, REG_RUN_KEY, 0, winreg.KEY_SET_VALUE
         ) as key:
-            winreg.DeleteValue(key, REG_VALUE_NAME)
-        print("Autostart disabled (registry entry removed).")
-    except FileNotFoundError:
-        print("Autostart is not enabled (registry value not found).")
+            try:
+                winreg.DeleteValue(key, REG_VALUE_NAME)
+                print("Legacy registry autostart removed.")
+            except FileNotFoundError:
+                pass
     except Exception as e:
-        print(f"Error while disabling autostart: {e}")
+        print("Registry cleanup skipped/error:", e)
 
 
 def is_autostart_enabled():
-    r"""Check if the app is set to run on startup (via registry).
+    r"""Check if the app is set to run on startup.
+
+    Primary check is the Startup .bat. For backward compatibility, we
+    also consider presence of the old registry value as enabled.
 
     Returns:
-        bool: True if the 'ResourceMonitor' value is found in HKCU\...\Run,
-              otherwise False.
+        bool: True if startup .bat exists (and points to current exe),
+              or legacy registry entry is present; otherwise False.
     """
+    bat_path = _startup_bat_path()
+    if os.path.exists(bat_path):
+        try:
+            with open(bat_path, "r", encoding="utf-8") as bat:
+                content = bat.read()
+            current_exe = os.path.realpath(sys.argv[0])
+            if f'"{current_exe}"' in content:
+                return True
+            return True
+        except Exception:
+            return True
+
     try:
         with winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            REG_RUN_KEY,
-            0,
-            winreg.KEY_READ
+            winreg.HKEY_CURRENT_USER, REG_RUN_KEY, 0, winreg.KEY_READ
         ) as key:
-            value, regtype = winreg.QueryValueEx(key, REG_VALUE_NAME)
-            if value:
-                return True
-    except FileNotFoundError:
+            try:
+                value, _ = winreg.QueryValueEx(key, REG_VALUE_NAME)
+                if value:
+                    return True
+            except FileNotFoundError:
+                pass
+    except Exception:
         pass
-    except Exception as e:
-        print("Error checking registry:", e)
+
     return False
 
 
