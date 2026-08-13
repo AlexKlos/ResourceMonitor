@@ -1,5 +1,10 @@
 # Resource Monitor Widget
 
+[![Latest Release](https://img.shields.io/github/v/release/AlexKlos/ResourceMonitor?label=release)](https://github.com/AlexKlos/ResourceMonitor/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+[Download the latest release](https://github.com/AlexKlos/ResourceMonitor/releases/latest)
+
 A lightweight and customizable always-on-top resource monitor for Windows
 10/11 that displays current CPU, GPU, and RAM usage.
 
