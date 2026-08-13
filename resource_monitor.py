@@ -721,16 +721,16 @@ class ResourceMonitor(QWidget):
         self.update()
 
     def is_in_startup(self):
-        """Check if the app is set to run on startup (registry-based)."""
+        """Check if the app is set to run on Windows startup."""
         return is_autostart_enabled()
 
     def enable_autostart(self):
-        """Enable the widget to run on Windows startup (registry-based)."""
+        """Enable the widget to run on Windows startup."""
         add_to_startup()
         print("Autostart enabled.")
 
     def disable_autostart(self):
-        """Disable the widget from running on Windows startup (registry-based)."""
+        """Disable the widget from running on Windows startup."""
         remove_from_startup()
         print("Autostart disabled.")
 

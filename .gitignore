@@ -1,0 +1,19 @@
+# Ignore virtual environment
+venv_resource_monitor/
+
+# Ignore other unnecessary files
+resource_monitor.dist/
+resource_monitor.build/
+resource_monitor.onefile-build/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+
+# Ignore IDE specific files
+.vscode/
+.idea/
+.env
+
+# Ignore compiled executable
+resource_monitor.exe
